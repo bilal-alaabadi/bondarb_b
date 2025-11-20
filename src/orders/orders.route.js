@@ -9,10 +9,10 @@ require("dotenv").config();
 
 const THAWANI_API_KEY = process.env.THAWANI_API_KEY; 
 const THAWANI_API_URL = process.env.THAWANI_API_URL;
-const publish_key = "HGvTMLDssJghr9tlN9gr4DVYt0qyBy";
+const THAWANI_PUBLISH_KEY = process.env.THAWANI_PUBLISH_KEY;
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({ origin: "https://www.bondarabia.com" }));
 app.use(express.json());
 
 // Create checkout session
@@ -163,8 +163,8 @@ router.post("/create-checkout-session", async (req, res) => {
       client_reference_id: nowId,
       mode: "payment",
       products: lineItems,
-      success_url: "http://localhost:5173/SuccessRedirect?client_reference_id=" + nowId,
-      cancel_url: "http://localhost:5173/cancel",
+      success_url: "https://www.bondarabia.com/SuccessRedirect?client_reference_id=" + nowId,
+      cancel_url: "https://www.bondarabia.com/cancel",
       metadata: {
         email: String(email || "غير محدد"),
         customer_name: String(customerName || ""),
@@ -194,7 +194,7 @@ router.post("/create-checkout-session", async (req, res) => {
       });
     }
 
-    const paymentLink = `https://uatcheckout.thawani.om/pay/${sessionId}?key=${publish_key}`;
+    const paymentLink = `https://checkout.thawani.om/pay/${sessionId}?key=${THAWANI_PUBLISH_KEY}`;
 
     // لا نحفظ في القاعدة هنا
     res.json({ id: sessionId, paymentLink });
