@@ -1,5 +1,4 @@
 // routes/products.route.js
-// CITATION: :contentReference[oaicite:1]{index=1}
 const express = require("express");
 const { Types } = require("mongoose");
 const Products = require("./products.model");
@@ -8,7 +7,7 @@ const verifyToken = require("../middleware/verifyToken");
 const verifyAdmin = require("../middleware/verifyAdmin");
 const router = express.Router();
 
-// أدوات الترجمة (باتت Async)
+// أدوات الترجمة (Async)
 const {
   applyLang,
   localizeProduct,
@@ -19,7 +18,7 @@ const {
 const { uploadImages } = require("../utils/uploadImage");
 router.post("/uploadImages", async (req, res) => {
   try {
-    const { images } = req.body; // مصفوفة Base64/DataURL
+    const { images } = req.body;
     if (!images || !Array.isArray(images)) {
       return res.status(400).send({ message: "يجب إرسال مصفوفة من الصور" });
     }
@@ -37,14 +36,25 @@ const CATEGORIES_NEED_SIZE = new Set([
   "Liquid Bath Soap",
 ]);
 
+const normalizeVariants = (variants) => {
+  if (!Array.isArray(variants)) return [];
+  return variants
+    .map((v) => ({
+      size: String(v?.size || "").trim(),
+      price: Number(v?.price),
+      oldPrice: v?.oldPrice !== undefined && v?.oldPrice !== "" ? Number(v.oldPrice) : 0,
+      inStock: v?.inStock === undefined ? true : Boolean(v.inStock),
+    }))
+    .filter((v) => v.size && Number.isFinite(v.price) && v.price > 0);
+};
+
 // ===================== إنشاء منتج =====================
 router.post("/create-product", async (req, res) => {
   try {
     const {
-      // الحقول الأساسية (قديمة/افتراضية)
+      // الأساسية
       name,
       category,
-      size,
       description,
       oldPrice,
       price,
@@ -52,7 +62,10 @@ router.post("/create-product", async (req, res) => {
       author,
       homeIndex,
 
-      // الحقول ثنائية اللغة (اختيارية)
+      // ✅ Variants
+      variants,
+
+      // ثنائي اللغة
       name_en,
       name_ar,
       description_en,
@@ -61,12 +74,15 @@ router.post("/create-product", async (req, res) => {
       category_ar,
     } = req.body;
 
-    if (!name || !category || !description || !price || !image || !author) {
+    if (!name || !category || !description || !image || !author) {
       return res.status(400).send({ message: "جميع الحقول المطلوبة يجب إرسالها" });
     }
 
-    if (CATEGORIES_NEED_SIZE.has(category) && !size) {
-      return res.status(400).send({ message: "يجب تحديد الحجم لهذا التصنيف" });
+    const normalizedVariants = normalizeVariants(variants);
+
+    // ✅ لو التصنيف يحتاج أحجام: لازم variants يكون فيها على الأقل حجم واحد
+    if (CATEGORIES_NEED_SIZE.has(category) && normalizedVariants.length === 0) {
+      return res.status(400).send({ message: "يجب تحديد حجم واحد على الأقل مع سعر لكل حجم لهذا التصنيف" });
     }
 
     let parsedHomeIndex;
@@ -78,38 +94,49 @@ router.post("/create-product", async (req, res) => {
       parsedHomeIndex = n;
     }
 
-    // اسم قديم متوافق (مع الحجم عند الحاجة)
-    const legacyName =
-      CATEGORIES_NEED_SIZE.has(category) && size ? `${name} - ${size}` : name;
+    // ✅ تحديد price/oldPrice الافتراضيين:
+    // - إذا يوجد variants: اجعل price أقل سعر Variant لعرضه في الكروت
+    // - إذا لا يوجد variants: استخدم price القادم من الفرونت
+    let basePrice;
+    if (normalizedVariants.length > 0) {
+      basePrice = Math.min(...normalizedVariants.map((v) => v.price));
+    } else {
+      basePrice = Number(price);
+    }
 
-    // توليد الأسماء ثنائية اللغة إن لم تُرسل (كما السابق)
-    const computedNameEn = CATEGORIES_NEED_SIZE.has(category) && size
-      ? `${(name_en || name || "")} - ${size}`
-      : (name_en || name || "");
-    const computedNameAr = CATEGORIES_NEED_SIZE.has(category) && size
-      ? `${(name_ar || name || "")} - ${size}`
-      : (name_ar || name || "");
+    if (!Number.isFinite(basePrice) || basePrice <= 0) {
+      return res.status(400).send({ message: "السعر غير صالح" });
+    }
+
+    let baseOldPrice;
+    if (normalizedVariants.length > 0) {
+      const olds = normalizedVariants.map((v) => Number(v.oldPrice || 0)).filter((x) => Number.isFinite(x) && x > 0);
+      baseOldPrice = olds.length > 0 ? Math.max(...olds) : (oldPrice !== undefined ? Number(oldPrice) : undefined);
+    } else {
+      baseOldPrice = oldPrice !== undefined && oldPrice !== "" ? Number(oldPrice) : undefined;
+    }
 
     const productData = {
-      // الحقول القديمة (تبقى للتوافق)
-      name: legacyName,
+      name: String(name).trim(),
       category,
-      description,
-      price,
-      oldPrice,
+      description: String(description).trim(),
+      price: basePrice,
+      oldPrice: Number.isFinite(baseOldPrice) ? baseOldPrice : undefined,
       image,
       author,
 
-      // الحقول ثنائية اللغة
-      name_en: computedNameEn || undefined,
-      name_ar: computedNameAr || undefined,
+      // ✅ variants
+      variants: normalizedVariants,
+
+      // ثنائي اللغة
+      name_en: name_en || undefined,
+      name_ar: name_ar || undefined,
       description_en: description_en || description || undefined,
       description_ar: description_ar || description || undefined,
       category_en: category_en || category || undefined,
       category_ar: category_ar || category || undefined,
     };
 
-    if (CATEGORIES_NEED_SIZE.has(category)) productData.size = size;
     if (parsedHomeIndex !== undefined) productData.homeIndex = parsedHomeIndex;
 
     const newProduct = new Products(productData);
@@ -137,11 +164,17 @@ router.get("/", async (req, res) => {
     } = req.query;
 
     const lang = applyLang(req);
-
     const filter = {};
 
     if (category && category !== "all") {
       filter.category = category;
+
+      // ✅ دعم فلترة الحجم للتصنيفات التي تعمل بالـ variants
+      if (size && CATEGORIES_NEED_SIZE.has(category)) {
+        filter["variants.size"] = size;
+      }
+
+      // (منطق قديم عندك كان مخصص لتصنيف آخر)
       if (category === "حناء بودر" && size) {
         filter.size = size;
       }
@@ -175,7 +208,6 @@ router.get("/", async (req, res) => {
       .populate("author", "email")
       .sort({ createdAt: -1 });
 
-    // ✅ أصبحت Async
     const products = await localizeProducts(docs, lang);
 
     res.status(200).send({ products, totalPages, totalProducts });
@@ -185,8 +217,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ===================== جلب منتج واحد (مسار صريح + تحقّق id) =====================
-// ===================== جلب منتج واحد (raw يدعم ) =====================
+// ===================== جلب منتج واحد (raw يدعم) =====================
 router.get("/product/:id", async (req, res) => {
   try {
     const productId = req.params.id;
@@ -195,27 +226,19 @@ router.get("/product/:id", async (req, res) => {
       return res.status(400).send({ message: "Invalid product id" });
     }
 
-    const productDoc = await Products.findById(productId).populate(
-      "author",
-      "email username"
-    );
+    const productDoc = await Products.findById(productId).populate("author", "email username");
     if (!productDoc) {
       return res.status(404).send({ message: "Product not found" });
     }
 
-    const reviews = await Reviews.find({ productId }).populate(
-      "userId",
-      "username email"
-    );
+    const reviews = await Reviews.find({ productId }).populate("userId", "username email");
 
-    // ✅ لو lang=raw، أرجع البيانات الخام بدون أي تعريب أو إسقاط لحقول ثنائية اللغة
     const qlang = String(req.query.lang || "").toLowerCase();
     if (qlang === "raw") {
       const product = productDoc.toObject({ getters: true, virtuals: false });
       return res.status(200).send({ product, reviews });
     }
 
-    // الحالة الافتراضية: تعريب حسب اللغة المطلوبة
     const lang = applyLang(req);
     const product = await localizeProduct(productDoc, lang);
     return res.status(200).send({ product, reviews });
@@ -226,6 +249,7 @@ router.get("/product/:id", async (req, res) => {
 });
 
 // ===================== تحديث منتج =====================
+// ========================= update-product route (Final) =========================
 const multer = require("multer");
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -234,7 +258,7 @@ router.patch(
   "/update-product/:id",
   verifyToken,
   verifyAdmin,
-  upload.array("image"), // يجب أن يطابق اسم الحقل المرسل من الفرونت
+  upload.array("image"),
   async (req, res) => {
     const session = await Products.startSession();
     try {
@@ -248,7 +272,6 @@ router.patch(
         return res.status(404).send({ message: "المنتج غير موجود" });
       }
 
-      // ====== التقاط الحقول من FormData (كلّها نصوص) ======
       const {
         name,
         category,
@@ -257,27 +280,28 @@ router.patch(
         description,
         author,
         size,
-        homeIndex,       // قد يأتي "", رقم كـ string، null، أو undefined
+        homeIndex,
         name_en,
         name_ar,
         description_en,
         description_ar,
         category_en,
         category_ar,
-        inStock,         // قد تأتي 'true'/'false'
-        keepImages,      // JSON string []
+        inStock,
+        keepImages,
+
+        // ✅ variants يمكن أن تصل JSON string من FormData
+        variants,
       } = req.body;
 
-      // ====== تحقق أساسي ======
       if (!name || !category || !price || !description) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).send({ message: "جميع الحقول المطلوبة يجب إرسالها" });
       }
 
-      // ====== تحويل الأرقام ======
-      const priceNum     = Number(price);
-      const oldPriceNum  = oldPrice !== "" && oldPrice !== undefined ? Number(oldPrice) : undefined;
+      const priceNum = Number(price);
+      const oldPriceNum = oldPrice !== "" && oldPrice !== undefined ? Number(oldPrice) : undefined;
 
       if (!Number.isFinite(priceNum) || priceNum <= 0) {
         await session.abortTransaction();
@@ -285,13 +309,12 @@ router.patch(
         return res.status(400).send({ message: "السعر غير صالح" });
       }
 
-      // ====== منطق homeIndex (تعيين أو حذف أو تجاهل) ======
+      // ====== homeIndex ======
       let homeIndexNum;
       let shouldUnsetHomeIndex = false;
 
       if (homeIndex !== undefined) {
         if (homeIndex === "" || homeIndex === null) {
-          // المستخدم اختار "بدون موضع" → نحذف الحقل
           shouldUnsetHomeIndex = true;
         } else {
           homeIndexNum = Number(homeIndex);
@@ -307,26 +330,43 @@ router.patch(
           }
         }
       }
-      // لو homeIndex === undefined → لا نغيره
 
-      // ====== تحويل Boolean ======
       const inStockBool =
         typeof inStock === "boolean"
           ? inStock
           : String(inStock).toLowerCase() === "true";
 
-      // ====== keepImages كنص JSON ======
+      // keepImages JSON
       let keepImagesArr = [];
       if (typeof keepImages === "string" && keepImages.trim() !== "") {
         try {
           const parsed = JSON.parse(keepImages);
           if (Array.isArray(parsed)) keepImagesArr = parsed.filter(Boolean);
+        } catch (_) {}
+      }
+
+      // ✅ variants JSON
+      let normalizedVariants = [];
+      const variantsWasSent = variants !== undefined;
+
+      if (variantsWasSent) {
+        try {
+          const vParsed = typeof variants === "string" ? JSON.parse(variants) : variants;
+          normalizedVariants = normalizeVariants(vParsed);
         } catch (_) {
-          // تجاهل JSON غير صالح
+          normalizedVariants = [];
+        }
+
+        if (CATEGORIES_NEED_SIZE.has(category) && normalizedVariants.length === 0) {
+          await session.abortTransaction();
+          session.endSession();
+          return res
+            .status(400)
+            .send({ message: "يجب تحديد حجم واحد على الأقل مع سعر لكل حجم لهذا التصنيف" });
         }
       }
 
-      // ====== رفع الصور الجديدة (إن وُجدت) ======
+      // رفع الصور الجديدة (إن وُجدت)
       let newImageUrls = [];
       if (Array.isArray(req.files) && req.files.length > 0) {
         newImageUrls = await Promise.all(
@@ -334,7 +374,6 @@ router.patch(
         );
       }
 
-      // ====== بناء بيانات التحديث ======
       const setData = {
         name: String(name).trim(),
         category,
@@ -344,48 +383,53 @@ router.patch(
         inStock: inStockBool,
         ...(Number.isFinite(oldPriceNum) ? { oldPrice: oldPriceNum } : { oldPrice: null }),
 
-        // حقول اختيارية
         ...(size ? { size } : {}),
 
-        // ثنائي اللغة
         ...(name_en ? { name_en } : {}),
         ...(name_ar ? { name_ar } : {}),
         ...(description_en ? { description_en } : {}),
         ...(description_ar ? { description_ar } : {}),
-
-        // تصنيف بلغتين (إن وجد)
         ...(category_en ? { category_en } : {}),
         ...(category_ar ? { category_ar } : {}),
       };
 
       const unsetData = {};
 
-      // الصور: إذا تم إرسال keepImages أو صور جديدة نكوّن الصورة النهائية
+      // ✅ تحديث variants فقط إذا تم إرسالها
+      if (variantsWasSent) {
+        setData.variants = normalizedVariants;
+
+        // ✅ اجعل السعر الافتراضي = أقل سعر variant (للعرض) إذا وُجدت
+        if (normalizedVariants.length > 0) {
+          setData.price = Math.min(...normalizedVariants.map((v) => v.price));
+
+          const olds = normalizedVariants
+            .map((v) => Number(v.oldPrice || 0))
+            .filter((x) => Number.isFinite(x) && x > 0);
+          if (olds.length > 0) setData.oldPrice = Math.max(...olds);
+
+          // ✅ إذا تحوّلنا لاستخدام variants: احذف size القديم (Single size legacy)
+          unsetData.size = "";
+        }
+      }
+
       if (keepImagesArr.length > 0 || newImageUrls.length > 0) {
         setData.image = [...keepImagesArr, ...newImageUrls];
       }
-      // وإلّا لن نعدل image
 
-      // ====== إزاحة تلقائية للـ homeIndex (داخل ترانزاكشن) ======
       if (shouldUnsetHomeIndex) {
-        // حذف حقل homeIndex من المنتج الحالي
         unsetData.homeIndex = "";
       } else if (Number.isFinite(homeIndexNum)) {
-        // 1) أزح أي منتج آخر يشغل نفس الموضع
         await Products.updateOne(
           { homeIndex: homeIndexNum, _id: { $ne: productId } },
           { $unset: { homeIndex: "" } },
           { session }
         );
-
-        // 2) عيّن الموضع للمنتج الحالي
         setData.homeIndex = homeIndexNum;
       }
-      // لو homeIndex === undefined: لا نلمسه
 
-      // ====== تنفيذ التحديث ======
       const updateOps = {};
-      if (Object.keys(setData).length)   updateOps.$set   = setData;
+      if (Object.keys(setData).length) updateOps.$set = setData;
       if (Object.keys(unsetData).length) updateOps.$unset = unsetData;
 
       const updated = await Products.findByIdAndUpdate(
@@ -406,7 +450,6 @@ router.patch(
 
       console.error("خطأ في تحديث المنتج", error);
 
-      // في حال سباق نادر جدًا، لو بقي تعارض فهرس:
       if (error?.code === 11000 && error?.keyPattern?.homeIndex) {
         return res.status(409).send({ message: "موضع الصفحة الرئيسية مستخدم حاليًا. أعد المحاولة." });
       }
@@ -415,7 +458,6 @@ router.patch(
     }
   }
 );
-
 
 
 // ===================== منتجات مشابهة =====================
@@ -446,7 +488,6 @@ router.get("/related/:id", async (req, res) => {
       $or: [{ name: { $regex: titleRegex } }, { category: product.category }],
     }).sort({ createdAt: -1 });
 
-    // ✅ أصبحت Async
     const relatedProducts = await localizeProducts(relatedDocs, lang);
     return res.status(200).send(relatedProducts);
   } catch (error) {
