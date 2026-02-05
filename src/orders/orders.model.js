@@ -15,26 +15,31 @@ const OrderSchema = new mongoose.Schema(
   {
     orderId: { type: String, required: true },
 
-    products: [
-      {
-        productId: { type: String, required: true },
-        quantity: { type: Number, required: true },
-        name: { type: String, required: true },
-        price: { type: Number, required: true }, // سعر الوحدة بالعملة الأساسية (ر.ع.)
-        image: { type: String },
-        category: { type: String },
-        measurements: {
-          length: { type: String },
-          sleeveLength: { type: String },
-          width: { type: String },
-          design: { type: String },
-          color: { type: String },
-          buttons: { type: String },
-        },
-        // ✅ بطاقة الهدية على مستوى كل منتج
-        giftCard: { type: GiftCardSchema, default: undefined },
-      },
-    ],
+products: [
+  {
+    productId: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    image: { type: String },
+    category: { type: String },
+
+    // ✅ الحجم المختار
+    selectedSize: { type: String },
+
+    measurements: {
+      length: { type: String },
+      sleeveLength: { type: String },
+      width: { type: String },
+      design: { type: String },
+      color: { type: String },
+      buttons: { type: String },
+    },
+
+    giftCard: { type: GiftCardSchema, default: undefined },
+  },
+],
+
 
     amount: { type: Number, required: true }, // المبلغ المدفوع فعلياً (ر.ع.)
     shippingFee: { type: Number, required: true, default: 2 }, // (ر.ع.)
