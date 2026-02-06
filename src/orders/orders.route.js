@@ -11,7 +11,7 @@ const THAWANI_API_KEY = process.env.THAWANI_API_KEY;
 const THAWANI_API_URL = process.env.THAWANI_API_URL;
 const THAWANI_PUBLISH_KEY = process.env.THAWANI_PUBLISH_KEY;
 
-const ORDER_CACHE = new Map(); // key: client_reference_id -> value: orderPayload
+const ORDER_CACHE = new Map(); 
 
 const toBaisa = (omr) => Math.max(100, Math.round(Number(omr || 0) * 1000)); // >= 100 بيسة
 
@@ -41,7 +41,6 @@ const normalizeGift = (gc) =>
 
 const FREE_SHIPPING_THRESHOLD = 14; // ر.ع
 
-// ========================= create-checkout-session =========================
 router.post("/create-checkout-session", async (req, res) => {
   const {
     products,
@@ -196,7 +195,6 @@ router.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-// ========================= confirm-payment (FIXED) =========================
 router.post("/confirm-payment", async (req, res) => {
   const { client_reference_id } = req.body;
 
