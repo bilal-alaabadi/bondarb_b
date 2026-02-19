@@ -39,7 +39,7 @@ const normalizeGift = (gc) =>
       }
     : undefined;
 
-const FREE_SHIPPING_THRESHOLD = 14; // ر.ع
+const FREE_SHIPPING_THRESHOLD = 15; // ر.ع
 
 router.post("/create-checkout-session", async (req, res) => {
   const {
