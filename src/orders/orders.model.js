@@ -46,7 +46,7 @@ products: [
 
     customerName: { type: String, required: true },
     customerPhone: { type: String, required: true },
-    country: { type: String, required: true },
+    state: { type: String, required: true },
     wilayat: { type: String, required: true },
     description: { type: String },
 
