@@ -47,7 +47,7 @@ router.post("/create-checkout-session", async (req, res) => {
     email,
     customerName,
     customerPhone,
-    country,
+    state,
     wilayat,
     description,
     depositMode,
@@ -73,7 +73,7 @@ router.post("/create-checkout-session", async (req, res) => {
     const subtotalAfterDiscount = Math.max(0, productsSubtotal - totalPairDiscount);
 
     let shippingFee =
-      country === "دول الخليج"
+      state === "دول الخليج"
         ? gulfCountry === "الإمارات"
           ? 4
           : 5
@@ -144,7 +144,7 @@ router.post("/create-checkout-session", async (req, res) => {
       shippingFee,
       customerName,
       customerPhone,
-      country,
+      state,
       wilayat,
       description,
       email: email || "",
@@ -166,7 +166,7 @@ router.post("/create-checkout-session", async (req, res) => {
         email: String(email || ""),
         customer_name: String(customerName || ""),
         customer_phone: String(customerPhone || ""),
-        country: String(country || ""),
+        state: String(state || ""),
         wilayat: String(wilayat || ""),
         description: String(description || ""),
         shippingFee: String(shippingFee),
@@ -245,7 +245,7 @@ router.post("/confirm-payment", async (req, res) => {
         shippingFee: cached.shippingFee,
         customerName: cached.customerName,
         customerPhone: cached.customerPhone,
-        country: cached.country,
+        state: cached.state,
         wilayat: cached.wilayat,
         description: cached.description,
         email: cached.email,
@@ -269,7 +269,7 @@ router.post("/confirm-payment", async (req, res) => {
       order.giftCard = cached.giftCard;
       order.customerName = cached.customerName;
       order.customerPhone = cached.customerPhone;
-      order.country = cached.country;
+      order.state = cached.state;
       order.wilayat = cached.wilayat;
       order.description = cached.description;
       order.email = cached.email;
