@@ -15,8 +15,8 @@ app.use(cookieParser());
 
 // Enhanced CORS configuration
 const allowedOrigins = [
-  "https://www.bondarabia.com",
-  "https://bondarabia.com",
+  "https://www.bondarabia.shop",
+  "https://bondarabia.shop",
   "http://localhost:5173",
 ];
 
