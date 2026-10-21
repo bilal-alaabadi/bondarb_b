@@ -160,8 +160,8 @@ router.post("/create-checkout-session", async (req, res) => {
       client_reference_id: nowId,
       mode: "payment",
       products: lineItems,
-      success_url: "https://www.bondarabia.com/SuccessRedirect?client_reference_id=" + nowId,
-      cancel_url: "https://www.bondarabia.com/checkout",
+      success_url: "https://www.bondarabia.shop/SuccessRedirect?client_reference_id=" + nowId,
+      cancel_url: "https://www.bondarabia.shop/checkout",
       metadata: {
         email: String(email || ""),
         customer_name: String(customerName || ""),
